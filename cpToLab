@@ -1,0 +1,10 @@
+#!/bin/bash
+host=denver.cs.colostate.edu
+dir=/s/bach/k/under/brandtr/cs455/Scaling
+archive=scaling.tar
+tar -cvf $archive * > /dev/null
+echo "$archive brandtr@$host:$dir"
+scp $archive brandtr@$host:$dir
+echo "ssh brandtr@$host 'cd $dir && tar -xvf $archive && rm $archive && rm cpToLab'"
+ssh brandtr@$host "cd $dir && tar -xvf $archive && cd $dir && rm $archive && rm cpToLab"
+rm scaling.tar
