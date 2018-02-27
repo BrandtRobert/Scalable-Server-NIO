@@ -30,6 +30,8 @@ public class Client {
 	private final int sendRate;
 	private final boolean verbose;
 	
+	private int posion = 0;
+	
 	public Client (String ip, int port, int sendRate, boolean verbose) {
 		this.host = ip;
 		this.port = port;
@@ -45,6 +47,7 @@ public class Client {
 		try {
 			SocketAddress hostAddress = new InetSocketAddress(InetAddress.getByName(ip), port);
 			hostConnection = SocketChannel.open(hostAddress);
+			System.out.println("Successfully connected to server");
 		} catch (Exception e) {
 			e.printStackTrace();
 		}			
@@ -133,6 +136,9 @@ public class Client {
                 		System.out.println("Received unrecognizd hash: " + receivedHash);
                 		System.out.println("Pending Hashes: ");
                 		hashlist.printList(receivedHash);
+                		if (posion++ == 5) {
+                			System.exit(2);
+                		}
                 	} else {
                 		receivedCount.getAndIncrement();
                 	}

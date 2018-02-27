@@ -1,6 +1,10 @@
 package cs455.scaling.concurrent;
 
-import java.util.concurrent.LinkedBlockingQueue;
+import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
+
+//import java.util.concurrent.LinkedBlockingQueue;
 
 import cs455.scaling.tasks.Task;
 import cs455.scaling.tasks.TestTask;
@@ -16,14 +20,14 @@ import cs455.scaling.tasks.TestTask;
  */
 public class ThreadPool {
 	private final int numberThreads;
-	private LinkedBlockingQueue<Task> taskQueue;
-	private WorkerThread [] workerThreads;
+//	private LinkedBlockingQueue<Task> taskQueue;
+	private final List<Task> taskQueue = Collections.synchronizedList(new LinkedList<Task>());
+	private final WorkerThread [] workerThreads;
 	private boolean debug = false;
 	private boolean started = false;
 
 	public ThreadPool (int nThreads) {
 		this.numberThreads = nThreads;
-		this.taskQueue = new LinkedBlockingQueue<Task>();
 		this.workerThreads = new WorkerThread [numberThreads];
 		// Create nThread new threads and start them
 		for (int i = 0; i < numberThreads; i++) {
@@ -93,18 +97,18 @@ public class ThreadPool {
 							System.err.println(this.threadName + " interrupted while waiting for next task.");
 						}
 					}
-				// Grab a task from the queue
-					task = taskQueue.poll();
-						try {
-							task.run();			// Perform the task.
-							task.setFinished(); // Set the finished flag on the task.
-							if (debug) {
-								System.out.println("Task performed by thread: " + threadName);
-							}
-						} catch (RuntimeException e) {
-							System.err.printf("%s failed a task, because of:\n%s", threadName, e.getMessage());
-							e.printStackTrace();
+					// Pop a task from the queue
+					task = taskQueue.remove(0);
+					try {
+						task.run();			// Perform the task.
+						task.setFinished(); // Set the finished flag on the task.
+						if (debug) {
+							System.out.println("Task performed by thread: " + threadName);
 						}
+					} catch (RuntimeException e) {
+						System.err.printf("%s failed a task, because of:\n%s", threadName, e.getMessage());
+						e.printStackTrace();
+					}
 				}
 			}
 		}

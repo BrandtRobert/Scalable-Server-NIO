@@ -38,11 +38,12 @@ public class HashList {
 	public void printList(String k) {
 		synchronized (hashlist) {
 			for (String s : hashlist) {
-				System.out.println(s + " " + k + "\tEquals?: " + s.equals(k));
-				System.out.println(s.length());
-				System.out.println(Arrays.toString(s.getBytes()));
-				System.out.println(k.length());
-				System.out.println(Arrays.toString(k.getBytes()));
+				System.out.println(s);
+//				System.out.println(s + " " + k + "\t Equals?: " + s.equals(k));
+//				System.out.println(s.length());
+//				System.out.println(Arrays.toString(s.getBytes()));
+//				System.out.println(k.length());
+//				System.out.println(Arrays.toString(k.getBytes()));
 			}
 		}
 	}

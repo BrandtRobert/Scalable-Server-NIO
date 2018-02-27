@@ -52,6 +52,7 @@ public class ReadMessageAndRespond extends Task {
 		try {
 			ByteBuffer msg = readMessage();
 			String shaHash = SHA1FromBytes(msg.array());	// SHA1 hash 160 bits, or 20 bytes
+//			System.out.println("Hash new content: " + shaHash);
 			ByteBuffer response = ByteBuffer.wrap(shaHash.getBytes());
 			client.getSocket().write(response);
 			client.incrementThroughput();
