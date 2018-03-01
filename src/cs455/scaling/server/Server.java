@@ -3,7 +3,7 @@ package cs455.scaling.server;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.nio.channels.CancelledKeyException;
+import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
@@ -15,21 +15,46 @@ import java.util.List;
 import java.util.Set;
 
 import cs455.scaling.concurrent.ThreadPool;
-import cs455.scaling.tasks.ReadMessageAndRespond;
+import cs455.scaling.tasks.HashMessage;
 import cs455.scaling.util.StatisticsCollectorAndDisplay;
+
+// Restructure server to do reading and writing: http://adblogcat.com/asynchronous-java-nio-for-dummies/
+// Hashes to be done in tasks
 
 public class Server {
 	private ThreadPool threadpool;
 	private List<ClientConnection> clientCache = new LinkedList<ClientConnection>();
+	private final int KB = 1000;
 	
-	/**
-	 * Creates a task for reading the msg, hashing, and responding to the client
-	 * @param client - the socket channel to read from
-	 */
-	private void respondToClient (SelectionKey client) {
-		((ClientConnection) client.attachment()).setIsReading(true);	// So the server knows that this read is handled
-		ReadMessageAndRespond task = new ReadMessageAndRespond(client);
-		threadpool.offerTask(task);
+	private void collectDiagnosticsAndDisplay() {
+		StatisticsCollectorAndDisplay stats = new StatisticsCollectorAndDisplay();
+		List<Double> clientData = new ArrayList<Double>();
+		synchronized (clientCache) {
+			for (ClientConnection c : clientCache) {
+				clientData.add((double) c.getAndResetThroughput());
+//				System.out.println("IP: " + c.getClientIP() + " reads: " +  c.keyReadCount);
+			}
+		}
+		stats.acceptNewDoubleValues(clientData);
+		stats.displayStatistics();
+	}
+	
+	private void startDiagnosticThread() {
+		Thread dianosticsThread = new Thread (new Runnable() {
+			@Override
+			public void run() {
+				while (true) {
+					int seconds = 20;
+					try {
+						Thread.sleep(1000 * seconds);
+						collectDiagnosticsAndDisplay();
+					} catch (InterruptedException e) {
+						e.printStackTrace();
+					}
+				}
+			}
+		});
+		dianosticsThread.start();
 	}
 	
 	private void registerNewConnection (Selector selector, ServerSocketChannel serversocket) {
@@ -47,27 +72,44 @@ public class Server {
 		}
 	}
 	
-	private void collectDiagnosticsAndDisplay() {
-		StatisticsCollectorAndDisplay stats = new StatisticsCollectorAndDisplay();
-		List<Double> clientData = new ArrayList<Double>();
-		List<ClientConnection> cleanUpList = new ArrayList<ClientConnection>(clientCache.size());
-		synchronized (clientCache) {
-			for (ClientConnection c : clientCache) {
-				if (!c.isDead()) {
-					clientData.add((double) c.getAndResetThroughput());
-				} else {
-					// To be cleaned up later
-					cleanUpList.add(c);
-				}
+	private void readAndCreateTask(SelectionKey key) {
+		ClientConnection client = (ClientConnection) key.attachment();
+		try {
+			ByteBuffer newClientMsg = ByteBuffer.allocate(8 * KB);
+			int read = 0;
+			while (newClientMsg.hasRemaining() && read != -1) {
+				read = client.getSocket().read(newClientMsg);
 			}
-			// Clean up cancelled clients
-			for (ClientConnection i : cleanUpList) {
-				clientCache.remove(i);
-			}
-			System.out.println("Now there are " + clientCache.size() + " clients in the cache");
+if (newClientMsg.position() < 8 * KB) {
+	System.out.println("Buffer contains less than 8KB in read");
+}
+			client.addNewClientMessage(newClientMsg);
+			HashMessage shaTask = new HashMessage(key);
+			threadpool.offerTask(shaTask);
+		} catch (IOException e) {
+			System.err.println("Failed to read message for client: " + e.getMessage());
+			clientCache.remove(client);
+			key.cancel();
 		}
-		stats.acceptNewDoubleValues(clientData);
-		stats.displayStatistics();
+	}
+	
+	private void writeResponse(SelectionKey key) {
+		ClientConnection client = (ClientConnection) key.attachment();
+		try {
+			List<ByteBuffer> msgsToSend = client.getHashList();
+			while (!msgsToSend.isEmpty()) {
+				ByteBuffer newMsg = msgsToSend.remove(0);
+				while (newMsg.hasRemaining()) {
+					client.getSocket().write(newMsg);
+				}
+				client.incrementThroughput();
+			}
+			key.interestOps(SelectionKey.OP_READ);
+		} catch (IOException e) {
+			System.err.println("Failed to write to client: " + e.getMessage());
+			clientCache.remove(client);
+			key.cancel();
+		}
 	}
 	
 	private void startServer(int portnum) {
@@ -87,49 +129,28 @@ public class Server {
 			System.err.println("Failed to start server");
 			return;
 		}
-		
-		Thread dianosticsThread = new Thread (new Runnable() {
-			@Override
-			public void run() {
-				while (true) {
-					int seconds = 20;
-					try {
-						Thread.sleep(1000 * seconds);
-						collectDiagnosticsAndDisplay();
-					} catch (InterruptedException e) {
-						e.printStackTrace();
-					}
-				}
-			}
-		});
-		dianosticsThread.start();
-		
+		startDiagnosticThread();
 		while (true) {
 			Set<SelectionKey> selectedKeys = null;
-			Iterator<SelectionKey> iter = null;
+			Iterator<SelectionKey> keys = null;
 			SelectionKey key = null;
 			try {
 				selector.select();
 				selectedKeys = selector.selectedKeys();
-	            iter = selectedKeys.iterator();
-	            while (iter.hasNext()) {
-	            	key = iter.next();
-	                if (key.isAcceptable()) {
+	            keys = selectedKeys.iterator();
+	            while (keys.hasNext()) {
+	            	key = keys.next();
+	            	keys.remove();
+	            	if (!key.isValid()) {
+	            		clientCache.remove(key.attachment());
+	            	} else if (key.isAcceptable()) {
 	                    registerNewConnection(selector, serversocket);
+	                } else if (key.isReadable()) {
+	                	readAndCreateTask(key);
+	                } else if (key.isWritable()) {
+	                	writeResponse(key);
 	                }
-	                if (key.isReadable()) {
-	                	// If write to the client caused an IOException than this client is dead, we want to remove it
-	                    // Lock the key from producing a task until the read is finished
-	                	ClientConnection client = ((ClientConnection) key.attachment());
-	                	if (!client.isReading() && !client.isDead()) {
-	                		respondToClient(key);
-	                	}
-	                }
-	                iter.remove();
 	            }
-			} catch (CancelledKeyException e) {
-				System.err.println("Selected key was cancelled due to IOException");
-				continue;
 			} catch (IOException e) {
 				System.err.println("Select operation failed: " + e.getMessage());
 				return;

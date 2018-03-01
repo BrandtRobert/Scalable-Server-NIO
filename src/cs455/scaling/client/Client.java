@@ -60,7 +60,10 @@ public class Client {
 	 */
 	private ByteBuffer getRandomBytes() {
 		byte [] randomBytes = new byte [KB * 8];
-		random.nextBytes(randomBytes);
+//		random.nextBytes(randomBytes);
+for (int i = 0; i < randomBytes.length; i++) {
+	randomBytes[i] = 0;
+}
 		return ByteBuffer.wrap(randomBytes);
 	}
 	
@@ -163,6 +166,7 @@ public class Client {
 			while (true) {
 				ByteBuffer randomBytes = getRandomBytes();
 				String hashCode = SHA1FromBytes(randomBytes.array());
+//				System.out.println("Sending new message expecting hash: " + hashCode);
 				hashlist.add(hashCode);
 				try {
 					server.write(randomBytes);
