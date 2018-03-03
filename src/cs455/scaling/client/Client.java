@@ -130,7 +130,11 @@ public class Client {
                 SelectionKey key = iter.next();
                 if (key.isReadable()) {
                 	// SHA hash is 40 bytes in size ?
-                	((SocketChannel) key.channel()).read(buffer);
+                	int read = 0;
+                	SocketChannel serverChannel = ((SocketChannel) key.channel());
+                	while (buffer.hasRemaining() && read == -1) {
+                		serverChannel.read(buffer);
+                	}
                 	String receivedHash = new String (buffer.array());
                 	if (!hashlist.removeIfPresent(receivedHash)) {
                 		System.out.println("Received unrecognizd hash: " + receivedHash);
@@ -142,8 +146,8 @@ public class Client {
                 	} else {
                 		receivedCount.getAndIncrement();
                 	}
+                	buffer.clear();
                 }
-                buffer.clear();
                 iter.remove();
             }
 		}

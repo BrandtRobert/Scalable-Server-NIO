@@ -33,15 +33,9 @@ public class ReadMessageAndRespond extends Task {
 	 * Algorithm from assignment page:
 	 * https://www.cs.colostate.edu/~cs455/CS455-Spring18-HW2-PC.pdf
 	 */
-	private String SHA1FromBytes(byte[] data) throws NoSuchAlgorithmException {
+	private byte[] SHA1FromBytes(byte[] data) throws NoSuchAlgorithmException {
 		 MessageDigest digest = MessageDigest.getInstance("SHA1");
-		 byte[] hash = digest.digest(data);
-		 BigInteger hashInt = new BigInteger(1, hash);
-		 String str = hashInt.toString(16);
-		 while (str.length() < 40) {
-			 str += "\0";
-		 }
-		 return str;
+		 return digest.digest(data);
 	}
 
 	@Override
@@ -51,9 +45,7 @@ public class ReadMessageAndRespond extends Task {
 		}
 		try {
 			ByteBuffer msg = readMessage();
-			String shaHash = SHA1FromBytes(msg.array());	// SHA1 hash 160 bits, or 20 bytes
-//			System.out.println("Hash new content: " + shaHash);
-			ByteBuffer response = ByteBuffer.wrap(shaHash.getBytes());
+			ByteBuffer response = ByteBuffer.wrap(SHA1FromBytes(msg.array()));
 			client.getSocket().write(response);
 			client.incrementThroughput();
 		} catch (NoSuchAlgorithmException e) {
