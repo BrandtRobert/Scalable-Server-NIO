@@ -36,11 +36,11 @@ Contains code to manage the server side of the application.
 
 #### ClientConnection
 
-An object that holds data pertinent for the server to know about a client. Allows you to test whether a client is alive, and keeps a count of the throughput for this client.
+An object that holds data pertinent for the server to know about a client. Allows you to test whether a client is alive, and keeps a count of the throughput for this client. Holds messages that need to be hashed for a client, and a list of hashes to be sent out to a client.
 
 #### Server
 
-An nio based server that accepts new connections, tracks client connections, and submits "hash and respond" tasks to the thread pool.
+An nio based server that accepts new connections, tracks client connections, and submits "HashMessage" tasks to the thread pool. In this implementation the server handles all reading and writing for client connections.
 
 ### Tasks
 
@@ -50,9 +50,9 @@ Contains different task objects. A task represents work to be done by the thread
 
 An abstract class that defines code for polling whether a task is finished and waiting for a task to finish. All tasks should extend the Task class.
 
-#### ReadMessageAndRespond
+#### HashMessage
 
-Reads a message from the supplied socket, hashs the message, and respond with that messages SHA-1 hashcode. If for some reason the client dies in the middle of this process, the task will cancel that clients key and set the client as dead.
+Take an 8KB message from the client connections list and hashes it using SHA-1. After performing a hash of the clients message it changes the client key's interest set to write. This helps balance how much reading and writing you are doign per client.
 
 ### Util
 

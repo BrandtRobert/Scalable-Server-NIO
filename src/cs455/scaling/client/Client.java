@@ -60,10 +60,7 @@ public class Client {
 	 */
 	private ByteBuffer getRandomBytes() {
 		byte [] randomBytes = new byte [KB * 8];
-//		random.nextBytes(randomBytes);
-for (int i = 0; i < randomBytes.length; i++) {
-	randomBytes[i] = 0;
-}
+		random.nextBytes(randomBytes);
 		return ByteBuffer.wrap(randomBytes);
 	}
 	
@@ -81,9 +78,6 @@ for (int i = 0; i < randomBytes.length; i++) {
 		 byte[] hash = digest.digest(data);
 		 BigInteger hashInt = new BigInteger(1, hash);
 		 String str = hashInt.toString(16);
-		 while (str.length() < 40) {
-			 str += "\0";
-		 }
 		 return str;
 	}
 	
@@ -128,13 +122,18 @@ for (int i = 0; i < randomBytes.length; i++) {
 			selector.select();
 			Set<SelectionKey> selectedKeys = selector.selectedKeys();
             Iterator<SelectionKey> iter = selectedKeys.iterator();
-            ByteBuffer buffer = ByteBuffer.allocate(40);
+            ByteBuffer buffer = ByteBuffer.allocate(20);
             while (iter.hasNext()) {
                 SelectionKey key = iter.next();
+                iter.remove();
                 if (key.isReadable()) {
-                	// SHA hash is 40 bytes in size ?
-                	((SocketChannel) key.channel()).read(buffer);
-                	String receivedHash = new String (buffer.array());
+                	SocketChannel serverChannel = ((SocketChannel) key.channel());
+                	int read = 0;
+                	while (buffer.hasRemaining() && read != -1) {
+                		serverChannel.read(buffer);
+                	}
+           		 	BigInteger hashInt = new BigInteger(1, buffer.array());
+           		 	String receivedHash = hashInt.toString(16);
                 	if (!hashlist.removeIfPresent(receivedHash)) {
                 		System.out.println("Received unrecognizd hash: " + receivedHash);
                 		System.out.println("Pending Hashes: ");
@@ -145,9 +144,8 @@ for (int i = 0; i < randomBytes.length; i++) {
                 	} else {
                 		receivedCount.getAndIncrement();
                 	}
+                	buffer.clear();
                 }
-                buffer.clear();
-                iter.remove();
             }
 		}
 	}
@@ -166,10 +164,11 @@ for (int i = 0; i < randomBytes.length; i++) {
 			while (true) {
 				ByteBuffer randomBytes = getRandomBytes();
 				String hashCode = SHA1FromBytes(randomBytes.array());
-//				System.out.println("Sending new message expecting hash: " + hashCode);
 				hashlist.add(hashCode);
 				try {
-					server.write(randomBytes);
+					while (randomBytes.hasRemaining()) {
+						server.write(randomBytes);
+					}
 					sentCount.getAndIncrement();
 					Thread.sleep(1000 / sendRate);
 				} catch (IOException e) {
