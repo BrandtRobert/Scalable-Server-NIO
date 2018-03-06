@@ -12,6 +12,7 @@ import java.nio.channels.SocketChannel;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.Random;
@@ -78,9 +79,6 @@ public class Client {
 		 byte[] hash = digest.digest(data);
 		 BigInteger hashInt = new BigInteger(1, hash);
 		 String str = hashInt.toString(16);
-		 while (str.length() < 40) {
-			 str += "\0";
-		 }
 		 return str;
 	}
 	
@@ -125,17 +123,18 @@ public class Client {
 			selector.select();
 			Set<SelectionKey> selectedKeys = selector.selectedKeys();
             Iterator<SelectionKey> iter = selectedKeys.iterator();
-            ByteBuffer buffer = ByteBuffer.allocate(40);
+            ByteBuffer buffer = ByteBuffer.allocate(20);
             while (iter.hasNext()) {
                 SelectionKey key = iter.next();
                 if (key.isReadable()) {
-                	// SHA hash is 40 bytes in size ?
+                	// SHA hash is 20 bytes in size ?
                 	int read = 0;
                 	SocketChannel serverChannel = ((SocketChannel) key.channel());
-                	while (buffer.hasRemaining() && read == -1) {
+                	while (buffer.hasRemaining() && read != -1) {
                 		serverChannel.read(buffer);
                 	}
-                	String receivedHash = new String (buffer.array());
+                	BigInteger hashInt = new BigInteger(1, buffer.array());
+                	String receivedHash = hashInt.toString(16);
                 	if (!hashlist.removeIfPresent(receivedHash)) {
                 		System.out.println("Received unrecognizd hash: " + receivedHash);
                 		System.out.println("Pending Hashes: ");
@@ -169,7 +168,9 @@ public class Client {
 				String hashCode = SHA1FromBytes(randomBytes.array());
 				hashlist.add(hashCode);
 				try {
-					server.write(randomBytes);
+					while (randomBytes.hasRemaining()) {
+						server.write(randomBytes);
+					}
 					sentCount.getAndIncrement();
 					Thread.sleep(1000 / sendRate);
 				} catch (IOException e) {

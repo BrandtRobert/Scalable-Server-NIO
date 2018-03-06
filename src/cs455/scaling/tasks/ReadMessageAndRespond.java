@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
 
 import cs455.scaling.server.ClientConnection;
 
@@ -46,7 +47,9 @@ public class ReadMessageAndRespond extends Task {
 		try {
 			ByteBuffer msg = readMessage();
 			ByteBuffer response = ByteBuffer.wrap(SHA1FromBytes(msg.array()));
-			client.getSocket().write(response);
+			while (response.hasRemaining()) {
+				client.getSocket().write(response);
+			}
 			client.incrementThroughput();
 		} catch (NoSuchAlgorithmException e) {
 			e.printStackTrace();
